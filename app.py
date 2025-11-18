@@ -394,7 +394,7 @@ def main():
             # Определяем дефолтные эмодзи для каждой категории
             default_done = ['leaves', 'ice_cube', 'ballot_box_with_check']
             default_in_progress = ['hammer_and_wrench']
-            default_control = ['loading']
+            default_control = ['loading', 'eyes']
             
             # Категория: Done
             with st.expander("✅ Done (Завершено)", expanded=True):
@@ -477,9 +477,18 @@ def main():
                     
                     st.divider()
                     
-                    # Статистика по каждой категории
-                    for category_name, emojis in categories.items():
-                        if not emojis:  # Пропускаем пустые категории
+                    # Статистика по каждой категории (в заданном порядке)
+                    category_order = ['Done', 'In Progress', 'Control']
+                    category_icons = {
+                        'Done': '✅',
+                        'In Progress': '🔧',
+                        'Control': '👁️'
+                    }
+                    
+                    for category_name in category_order:
+                        emojis = categories.get(category_name, [])
+                        
+                        if not emojis:  # Пропускаем категории без выбранных эмодзи
                             continue
                         
                         # Собираем уникальные посты для категории
@@ -493,13 +502,6 @@ def main():
                                     category_posts_dict[post_id] = post
                         
                         category_posts_list = list(category_posts_dict.values())
-                        
-                        # Определяем иконку для категории
-                        category_icons = {
-                            'Done': '✅',
-                            'In Progress': '🔧',
-                            'Control': '👁️'
-                        }
                         icon = category_icons.get(category_name, '📌')
                         
                         with st.expander(f"{icon} {category_name} — {len(category_posts_list)} постов", expanded=True):

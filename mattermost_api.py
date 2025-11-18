@@ -448,8 +448,12 @@ def analyze_channel_emojis(posts: list) -> list:
     """
     emojis = set()
     
-    # Дефолтные эмодзи
-    default_emojis = ['ballot_box_with_check', 'leaves', 'ice_cube', 'hammer_and_wrench']
+    # Дефолтные эмодзи для всех категорий
+    default_emojis = [
+        'ballot_box_with_check', 'leaves', 'ice_cube',  # Done
+        'hammer_and_wrench',  # In Progress
+        'loading', 'eyes'  # Control
+    ]
     
     # Собираем уникальные эмодзи из реакций
     for post in posts:
