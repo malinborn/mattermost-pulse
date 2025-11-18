@@ -468,3 +468,59 @@ def get_posts_by_emoji(posts: list, emoji_name: str) -> list:
             posts_with_emoji.append(post_copy)
     
     return posts_with_emoji
+
+
+def filter_root_posts_only(posts: list) -> list:
+    """
+    Фильтрует только root посты (без replies из тредов).
+    
+    Args:
+        posts: Список постов
+        
+    Returns:
+        list: Список только root постов (у которых нет root_id)
+    """
+    return [post for post in posts if not post.get('root_id')]
+
+
+def enrich_posts_with_thread_reactions(server_url: str, token: str, posts: list) -> list:
+    """
+    Обогащает посты канала реакциями из их тредов.
+    Для каждого поста получает все реакции из его треда и добавляет к metadata.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        posts: Список постов канала
+        
+    Returns:
+        list: Посты с обогащенными реакциями (root + thread replies)
+    """
+    enriched_posts = []
+    
+    for post in posts:
+        post_id = post.get('id')
+        if not post_id:
+            enriched_posts.append(post)
+            continue
+        
+        # Создаем копию поста
+        enriched_post = post.copy()
+        
+        try:
+            # Получаем все реакции из треда (включая root пост)
+            thread_reactions = get_thread_reactions(server_url, token, post_id, include_replies=True)
+            
+            if thread_reactions:
+                # Обновляем metadata с реакциями из всего треда
+                if 'metadata' not in enriched_post:
+                    enriched_post['metadata'] = {}
+                
+                enriched_post['metadata']['reactions'] = thread_reactions
+        except:
+            # Если не удалось получить тред, оставляем как есть
+            pass
+        
+        enriched_posts.append(enriched_post)
+    
+    return enriched_posts

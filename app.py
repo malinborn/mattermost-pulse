@@ -22,7 +22,9 @@ from mattermost_api import (
     get_channel_posts,
     analyze_channel_emojis,
     get_posts_without_reactions,
-    get_posts_by_emoji
+    get_posts_by_emoji,
+    filter_root_posts_only,
+    enrich_posts_with_thread_reactions
 )
 
 
@@ -286,6 +288,13 @@ def main():
                 help="Конец периода для анализа"
             )
         
+        # Checkbox для включения реакций из тредов
+        include_thread_reactions = st.checkbox(
+            "Включить сообщения из тредов",
+            value=False,
+            help="Если включено, будут собраны реакции из рутовых постов и всех ответов в тредах"
+        )
+        
         # Кнопка загрузки постов
         if st.button("🔄 Загрузить посты и проанализировать эмодзи", type="primary", use_container_width=True, key="load_channel"):
             if not server_url:
@@ -320,6 +329,21 @@ def main():
                         else:
                             st.success(f"✅ Загружено постов: {len(posts)}")
                             
+                            # Если включены реакции из тредов, обогащаем посты
+                            if include_thread_reactions:
+                                # Сначала фильтруем только root посты
+                                root_posts = filter_root_posts_only(posts)
+                                st.info(f"📊 Найдено root постов: {len(root_posts)}")
+                                
+                                # Затем обогащаем их реакциями из тредов
+                                with st.spinner("🔄 Загрузка реакций из тредов..."):
+                                    posts = enrich_posts_with_thread_reactions(server_url, personal_token, root_posts)
+                                st.success("✅ Реакции из тредов добавлены")
+                            else:
+                                # Фильтруем только root посты
+                                posts = filter_root_posts_only(posts)
+                                st.info(f"📊 Root постов (без replies): {len(posts)}")
+                            
                             # Анализируем эмодзи
                             with st.spinner("🔍 Анализ эмодзи..."):
                                 found_emojis = analyze_channel_emojis(posts)
@@ -330,6 +354,7 @@ def main():
                             st.session_state.channel_posts = posts
                             st.session_state.found_emojis = found_emojis
                             st.session_state.channel_id = channel_id
+                            st.session_state.include_thread_reactions = include_thread_reactions
                             
                     except ValueError as e:
                         st.error(f"❌ Ошибка: {str(e)}")
@@ -339,6 +364,14 @@ def main():
         # Если посты загружены, показываем опции для выбора эмодзи
         if 'channel_posts' in st.session_state and st.session_state.channel_posts:
             st.divider()
+            
+            # Показываем информацию о режиме загрузки
+            thread_mode = st.session_state.get('include_thread_reactions', False)
+            if thread_mode:
+                st.info("ℹ️ Данные загружены с учетом реакций из тредов")
+            else:
+                st.info("ℹ️ Данные загружены только для рутовых постов (без тредов)")
+            
             st.markdown("**Выберите фильтры для анализа:**")
             
             # Определяем дефолтные эмодзи
