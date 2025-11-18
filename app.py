@@ -2,6 +2,7 @@
 Mattermost Reactions Exporter
 Экспортирует реакции из постов Mattermost в YAML-формат.
 """
+import os
 import streamlit as st
 from tabs.thread_tab import render_thread_tab
 from tabs.channel_tab import render_channel_tab
@@ -17,6 +18,9 @@ def main():
     st.title("📊 Mattermost post analyzer")
     st.markdown("Получает реакции из поста или канала Mattermost и показывает данные в удобном формате")
     
+    # Проверяем переменную среды для токена
+    env_token = os.getenv("MATTERMOST_PERSONAL_TOKEN", "")
+    
     # Общие настройки подключения
     st.subheader("Настройки подключения")
     
@@ -29,9 +33,10 @@ def main():
     
     personal_token = st.text_input(
         "Личный токен доступа",
+        value=env_token,
         type="password",
         placeholder="Введите ваш личный токен",
-        help="Личный токен для авторизации в Mattermost API"
+        help="Личный токен для авторизации в Mattermost API (или установите переменную среды MATTERMOST_PERSONAL_TOKEN)"
     )
     
     # Сохраняем в session_state для использования во всех вкладках
