@@ -19,12 +19,16 @@ from mattermost_api import (
     get_thread_posts_with_reactions,
     # Функции для работы с каналами
     parse_channel_id_from_url,
+    get_channel_info,
+    get_team_info,
     get_channel_posts,
     analyze_channel_emojis,
     get_posts_without_reactions,
     get_posts_by_emoji,
     filter_root_posts_only,
-    enrich_posts_with_thread_reactions
+    filter_system_messages,
+    enrich_posts_with_thread_reactions,
+    generate_post_link
 )
 
 
@@ -312,6 +316,12 @@ def main():
                         channel_id = parse_channel_id_from_url(channel_input)
                         st.info(f"📝 Channel ID: `{channel_id}`")
                         
+                        # Получаем информацию о канале и team для генерации ссылок
+                        channel_info = get_channel_info(server_url, personal_token, channel_id)
+                        team_id = channel_info.get('team_id', '')
+                        team_info = get_team_info(server_url, personal_token, team_id) if team_id else {}
+                        team_name = team_info.get('name', 'team')
+                        
                         # Получаем посты
                         start_datetime = datetime.combine(start_date, datetime.min.time())
                         end_datetime = datetime.combine(end_date, datetime.max.time())
@@ -328,6 +338,10 @@ def main():
                             st.warning("ℹ️ Нет постов за указанный период")
                         else:
                             st.success(f"✅ Загружено постов: {len(posts)}")
+                            
+                            # Фильтруем системные сообщения
+                            posts = filter_system_messages(posts)
+                            st.info(f"🧹 После фильтрации системных сообщений: {len(posts)}")
                             
                             # Если включены реакции из тредов, обогащаем посты
                             if include_thread_reactions:
@@ -355,6 +369,8 @@ def main():
                             st.session_state.found_emojis = found_emojis
                             st.session_state.channel_id = channel_id
                             st.session_state.include_thread_reactions = include_thread_reactions
+                            st.session_state.team_name = team_name
+                            st.session_state.server_url = server_url
                             
                     except ValueError as e:
                         st.error(f"❌ Ошибка: {str(e)}")
@@ -388,24 +404,16 @@ def main():
                 key="channel_emojis"
             )
             
-            # Checkbox для показа постов без реакций
-            show_no_reactions = st.checkbox(
-                "Показать посты без реакций",
-                value=False,
-                help="Включить в статистику посты без каких-либо реакций"
-            )
-            
             # Кнопка "Показать статистику"
             if st.button("📊 Показать статистику", type="secondary", use_container_width=True, key="show_stats"):
-                if not selected_emojis and not show_no_reactions:
-                    st.warning("⚠️ Выберите хотя бы один эмодзи или включите опцию 'Показать посты без реакций'")
+                if not selected_emojis:
+                    st.warning("⚠️ Выберите хотя бы один эмодзи")
                 else:
                     st.divider()
                     st.subheader("📊 Статистика")
                     
                     # Сохраняем выбор в session_state
                     st.session_state.selected_emojis = selected_emojis
-                    st.session_state.show_no_reactions = show_no_reactions
                     
                     # Общая статистика
                     total_posts = len(st.session_state.channel_posts)
@@ -463,42 +471,55 @@ def main():
                                     else:
                                         post_date = 'Unknown'
                                     
+                                    # Генерируем ссылку на пост
+                                    post_link = generate_post_link(
+                                        st.session_state.server_url,
+                                        st.session_state.team_name,
+                                        post_id
+                                    )
+                                    
                                     # Отображаем информацию
                                     st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date} | **Реакций:** {emoji_count}")
                                     st.markdown(f"**Текст:** {message[:200]}{'...' if len(message) > 200 else ''}")
-                                    st.markdown(f"**ID поста:** `{post_id}`")
+                                    st.markdown(f"**Ссылка:** [{post_id}]({post_link})")
                                     st.markdown("---")
                                 
                                 if len(posts_with_emoji) > 50:
                                     st.info(f"Показано первых 50 из {len(posts_with_emoji)} постов")
                     
-                    # Посты без реакций
-                    if show_no_reactions:
-                        with st.expander(f"📭 Посты без реакций — {len(posts_without_reactions)} постов", expanded=True):
-                            if not posts_without_reactions:
-                                st.info("Нет постов без реакций")
-                            else:
-                                for post in posts_without_reactions[:50]:  # Ограничиваем 50 постами
-                                    # Получаем информацию о посте
-                                    message = post.get('message', '')
-                                    user_id = post.get('user_id', 'unknown')
-                                    post_id = post.get('id', '')
-                                    create_at = post.get('create_at', 0)
-                                    
-                                    # Форматируем дату
-                                    if create_at:
-                                        post_date = datetime.fromtimestamp(create_at / 1000).strftime('%Y-%m-%d %H:%M')
-                                    else:
-                                        post_date = 'Unknown'
-                                    
-                                    # Отображаем информацию
-                                    st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date}")
-                                    st.markdown(f"**Текст:** {message[:200]}{'...' if len(message) > 200 else ''}")
-                                    st.markdown(f"**ID поста:** `{post_id}`")
-                                    st.markdown("---")
+                    # Посты без реакций (показываем всегда)
+                    with st.expander(f"📭 Посты без реакций — {len(posts_without_reactions)} постов", expanded=False):
+                        if not posts_without_reactions:
+                            st.info("Нет постов без реакций")
+                        else:
+                            for post in posts_without_reactions[:50]:  # Ограничиваем 50 постами
+                                # Получаем информацию о посте
+                                message = post.get('message', '')
+                                user_id = post.get('user_id', 'unknown')
+                                post_id = post.get('id', '')
+                                create_at = post.get('create_at', 0)
                                 
-                                if len(posts_without_reactions) > 50:
-                                    st.info(f"Показано первых 50 из {len(posts_without_reactions)} постов")
+                                # Форматируем дату
+                                if create_at:
+                                    post_date = datetime.fromtimestamp(create_at / 1000).strftime('%Y-%m-%d %H:%M')
+                                else:
+                                    post_date = 'Unknown'
+                                
+                                # Генерируем ссылку на пост
+                                post_link = generate_post_link(
+                                    st.session_state.server_url,
+                                    st.session_state.team_name,
+                                    post_id
+                                )
+                                
+                                # Отображаем информацию
+                                st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date}")
+                                st.markdown(f"**Текст:** {message[:200]}{'...' if len(message) > 200 else ''}")
+                                st.markdown(f"**Ссылка:** [{post_id}]({post_link})")
+                                st.markdown("---")
+                            
+                            if len(posts_without_reactions) > 50:
+                                st.info(f"Показано первых 50 из {len(posts_without_reactions)} постов")
 
 
 if __name__ == "__main__":

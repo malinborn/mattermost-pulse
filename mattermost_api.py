@@ -290,6 +290,52 @@ def parse_channel_id_from_url(url: str) -> str:
     return match.group(1) if match else url.strip()
 
 
+def get_channel_info(server_url: str, token: str, channel_id: str) -> dict:
+    """
+    Получает информацию о канале.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        channel_id: ID канала
+        
+    Returns:
+        dict: Информация о канале (включая team_id)
+    """
+    api_url = f"{server_url.rstrip('/')}/api/v4/channels/{channel_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(api_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
+        return {}
+
+
+def get_team_info(server_url: str, token: str, team_id: str) -> dict:
+    """
+    Получает информацию о team.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        team_id: ID команды
+        
+    Returns:
+        dict: Информация о team (включая name)
+    """
+    api_url = f"{server_url.rstrip('/')}/api/v4/teams/{team_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(api_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
+        return {}
+
+
 def format_post_preview(post_text: str, max_length: int = 100) -> str:
     """Форматирует превью текста поста."""
     if not post_text:
@@ -481,6 +527,19 @@ def filter_root_posts_only(posts: list) -> list:
         list: Список только root постов (у которых нет root_id)
     """
     return [post for post in posts if not post.get('root_id')]
+
+
+def filter_system_messages(posts: list) -> list:
+    """
+    Фильтрует системные сообщения (присоединение/выход из канала и т.д.).
+    
+    Args:
+        posts: Список постов
+        
+    Returns:
+        list: Список постов без системных сообщений
+    """
+    return [post for post in posts if not post.get('type')]
 
 
 def enrich_posts_with_thread_reactions(server_url: str, token: str, posts: list) -> list:
