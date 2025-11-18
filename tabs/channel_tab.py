@@ -151,40 +151,57 @@ def _render_categories_and_stats():
     st.markdown("**Настройка категорий статусов:**")
     st.markdown("Распределите эмодзи по категориям для группировки статистики")
     
-    # Дефолтные эмодзи
+    # Дефолтные эмодзи для всех категорий
     default_done = ['leaves', 'ice_cube', 'ballot_box_with_check']
     default_in_progress = ['hammer_and_wrench']
     default_control = ['loading', 'eyes']
     
+    # Подготавливаем дефолты, которые есть в найденных эмодзи
+    done_default = [e for e in default_done if e in st.session_state.found_emojis]
+    in_progress_default = [e for e in default_in_progress if e in st.session_state.found_emojis]
+    control_default = [e for e in default_control if e in st.session_state.found_emojis]
+    
     # Категория: Done
+    # Исключаем из options дефолты последующих категорий
+    reserved_for_later = set(in_progress_default + control_default)
+    available_for_done = [e for e in st.session_state.found_emojis if e not in reserved_for_later]
+    
     with st.expander("✅ Done (Завершено)", expanded=True):
-        done_default = [e for e in default_done if e in st.session_state.found_emojis]
         done_emojis = st.multiselect(
             "Эмодзи для категории Done",
-            options=st.session_state.found_emojis,
+            options=available_for_done,
             default=done_default,
             key="done_emojis",
             help="Эмодзи, обозначающие завершенные задачи"
         )
     
     # Категория: In Progress
+    # Исключаем уже выбранные в Done и дефолты Control
+    reserved_for_control = set(control_default)
+    available_for_in_progress = [
+        e for e in st.session_state.found_emojis 
+        if e not in done_emojis and e not in reserved_for_control
+    ]
+    
     with st.expander("🔧 In Progress (В процессе)", expanded=True):
-        in_progress_default = [e for e in default_in_progress if e in st.session_state.found_emojis]
         in_progress_emojis = st.multiselect(
             "Эмодзи для категории In Progress",
-            options=st.session_state.found_emojis,
-            default=in_progress_default,
+            options=available_for_in_progress,
+            default=[e for e in in_progress_default if e in available_for_in_progress],
             key="in_progress_emojis",
             help="Эмодзи, обозначающие задачи в процессе"
         )
     
     # Категория: Control
+    # Исключаем уже выбранные в Done и In Progress
+    used_emojis = set(done_emojis) | set(in_progress_emojis)
+    available_for_control = [e for e in st.session_state.found_emojis if e not in used_emojis]
+    
     with st.expander("👁️ Control (Контроль)", expanded=True):
-        control_default = [e for e in default_control if e in st.session_state.found_emojis]
         control_emojis = st.multiselect(
             "Эмодзи для категории Control",
-            options=st.session_state.found_emojis,
-            default=control_default,
+            options=available_for_control,
+            default=[e for e in control_default if e in available_for_control],
             key="control_emojis",
             help="Эмодзи, обозначающие задачи на контроле"
         )
