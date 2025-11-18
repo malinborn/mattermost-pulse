@@ -388,32 +388,63 @@ def main():
             else:
                 st.info("ℹ️ Данные загружены только для рутовых постов (без тредов)")
             
-            st.markdown("**Выберите фильтры для анализа:**")
+            st.markdown("**Настройка категорий статусов:**")
+            st.markdown("Распределите эмодзи по категориям для группировки статистики")
             
-            # Определяем дефолтные эмодзи
-            default_emojis = ['ballot_box_with_check', 'leaves', 'ice_cube', 'hammer_and_wrench']
-            # Выбираем только те дефолтные эмодзи, которые есть в найденных
-            default_selected = [e for e in default_emojis if e in st.session_state.found_emojis]
+            # Определяем дефолтные эмодзи для каждой категории
+            default_done = ['leaves', 'ice_cube', 'ballot_box_with_check']
+            default_in_progress = ['hammer_and_wrench']
+            default_control = ['loading']
             
-            # Multiselect для выбора эмодзи
-            selected_emojis = st.multiselect(
-                "Эмодзи для анализа",
-                options=st.session_state.found_emojis,
-                default=default_selected,
-                help="Выберите один или несколько эмодзи для отображения статистики",
-                key="channel_emojis"
-            )
+            # Категория: Done
+            with st.expander("✅ Done (Завершено)", expanded=True):
+                done_default = [e for e in default_done if e in st.session_state.found_emojis]
+                done_emojis = st.multiselect(
+                    "Эмодзи для категории Done",
+                    options=st.session_state.found_emojis,
+                    default=done_default,
+                    key="done_emojis",
+                    help="Эмодзи, обозначающие завершенные задачи"
+                )
+            
+            # Категория: In Progress
+            with st.expander("🔧 In Progress (В процессе)", expanded=True):
+                in_progress_default = [e for e in default_in_progress if e in st.session_state.found_emojis]
+                in_progress_emojis = st.multiselect(
+                    "Эмодзи для категории In Progress",
+                    options=st.session_state.found_emojis,
+                    default=in_progress_default,
+                    key="in_progress_emojis",
+                    help="Эмодзи, обозначающие задачи в процессе"
+                )
+            
+            # Категория: Control
+            with st.expander("👁️ Control (Контроль)", expanded=True):
+                control_default = [e for e in default_control if e in st.session_state.found_emojis]
+                control_emojis = st.multiselect(
+                    "Эмодзи для категории Control",
+                    options=st.session_state.found_emojis,
+                    default=control_default,
+                    key="control_emojis",
+                    help="Эмодзи, обозначающие задачи на контроле"
+                )
             
             # Кнопка "Показать статистику"
             if st.button("📊 Показать статистику", type="secondary", use_container_width=True, key="show_stats"):
-                if not selected_emojis:
-                    st.warning("⚠️ Выберите хотя бы один эмодзи")
+                # Проверяем, что хотя бы в одной категории есть эмодзи
+                if not done_emojis and not in_progress_emojis and not control_emojis:
+                    st.warning("⚠️ Выберите хотя бы один эмодзи в любой из категорий")
                 else:
                     st.divider()
                     st.subheader("📊 Статистика")
                     
-                    # Сохраняем выбор в session_state
-                    st.session_state.selected_emojis = selected_emojis
+                    # Сохраняем категории в session_state
+                    categories = {
+                        'Done': done_emojis,
+                        'In Progress': in_progress_emojis,
+                        'Control': control_emojis
+                    }
+                    st.session_state.categories = categories
                     
                     # Общая статистика
                     total_posts = len(st.session_state.channel_posts)
@@ -430,40 +461,74 @@ def main():
                     
                     st.divider()
                     
-                    # Таблица с подсчетом эмодзи
-                    if selected_emojis:
-                        st.markdown("### Сводка по эмодзи")
-                        emoji_summary = {}
-                        
-                        for emoji in selected_emojis:
-                            posts_with_emoji = get_posts_by_emoji(st.session_state.channel_posts, emoji)
-                            total_reactions = sum(p.get('emoji_count', 0) for p in posts_with_emoji)
-                            emoji_summary[f":{emoji}:"] = {
-                                "Постов": len(posts_with_emoji),
-                                "Всего реакций": total_reactions
-                            }
-                        
-                        # Отображаем таблицу
-                        df = pd.DataFrame(emoji_summary).T
-                        st.dataframe(df, use_container_width=True)
+                    # Таблица с подсчетом по категориям
+                    st.markdown("### Сводка по категориям")
+                    
+                    category_data = []
+                    for category_name, emojis in categories.items():
+                        if emojis:  # Только если в категории есть эмодзи
+                            # Собираем все посты для всех эмодзи в категории
+                            category_posts = set()
+                            total_reactions_count = 0
+                            
+                            for emoji in emojis:
+                                posts_with_emoji = get_posts_by_emoji(st.session_state.channel_posts, emoji)
+                                for post in posts_with_emoji:
+                                    category_posts.add(post['id'])
+                                    total_reactions_count += post.get('emoji_count', 0)
+                            
+                            category_data.append({
+                                'Категория': category_name,
+                                'Эмодзи': ', '.join([f':{e}:' for e in emojis]),
+                                'Постов': len(category_posts),
+                                'Всего реакций': total_reactions_count
+                            })
+                    
+                    if category_data:
+                        df = pd.DataFrame(category_data)
+                        st.dataframe(df, use_container_width=True, hide_index=True)
                         
                         st.divider()
                     
-                    # Статистика по каждому выбранному эмодзи
-                    for emoji in selected_emojis:
-                        posts_with_emoji = get_posts_by_emoji(st.session_state.channel_posts, emoji)
+                    # Статистика по каждой категории
+                    for category_name, emojis in categories.items():
+                        if not emojis:  # Пропускаем пустые категории
+                            continue
                         
-                        with st.expander(f":{emoji}: — {len(posts_with_emoji)} постов", expanded=True):
-                            if not posts_with_emoji:
-                                st.info("Нет постов с этой реакцией")
+                        # Собираем уникальные посты для категории
+                        category_posts_dict = {}  # post_id -> post data
+                        
+                        for emoji in emojis:
+                            posts_with_emoji = get_posts_by_emoji(st.session_state.channel_posts, emoji)
+                            for post in posts_with_emoji:
+                                post_id = post.get('id')
+                                if post_id not in category_posts_dict:
+                                    category_posts_dict[post_id] = post
+                        
+                        category_posts_list = list(category_posts_dict.values())
+                        
+                        # Определяем иконку для категории
+                        category_icons = {
+                            'Done': '✅',
+                            'In Progress': '🔧',
+                            'Control': '👁️'
+                        }
+                        icon = category_icons.get(category_name, '📌')
+                        
+                        with st.expander(f"{icon} {category_name} — {len(category_posts_list)} постов", expanded=True):
+                            # Показываем эмодзи в категории
+                            st.markdown(f"**Эмодзи:** {', '.join([f':{e}:' for e in emojis])}")
+                            st.divider()
+                            
+                            if not category_posts_list:
+                                st.info(f"Нет постов в категории {category_name}")
                             else:
-                                for post in posts_with_emoji[:50]:  # Ограничиваем 50 постами
+                                for post in category_posts_list[:50]:  # Ограничиваем 50 постами
                                     # Получаем информацию о посте
                                     message = post.get('message', '')
                                     user_id = post.get('user_id', 'unknown')
                                     post_id = post.get('id', '')
                                     create_at = post.get('create_at', 0)
-                                    emoji_count = post.get('emoji_count', 0)
                                     
                                     # Форматируем дату
                                     if create_at:
@@ -479,13 +544,13 @@ def main():
                                     )
                                     
                                     # Отображаем информацию
-                                    st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date} | **Реакций:** {emoji_count}")
+                                    st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date}")
                                     st.markdown(f"**Текст:** {message[:200]}{'...' if len(message) > 200 else ''}")
                                     st.markdown(f"**Ссылка:** [{post_id}]({post_link})")
                                     st.markdown("---")
                                 
-                                if len(posts_with_emoji) > 50:
-                                    st.info(f"Показано первых 50 из {len(posts_with_emoji)} постов")
+                                if len(category_posts_list) > 50:
+                                    st.info(f"Показано первых 50 из {len(category_posts_list)} постов")
                     
                     # Посты без реакций (показываем всегда)
                     with st.expander(f"📭 Посты без реакций — {len(posts_without_reactions)} постов", expanded=False):
