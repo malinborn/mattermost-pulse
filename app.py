@@ -3,6 +3,9 @@ Mattermost Reactions Exporter
 Экспортирует реакции из постов Mattermost в YAML-формат.
 """
 
+from datetime import datetime
+
+import pandas as pd
 import streamlit as st
 
 from mattermost_api import (
@@ -13,7 +16,13 @@ from mattermost_api import (
     get_thread_reactions,
     get_thread_reactions_separated,
     get_thread_posts,
-    get_thread_posts_with_reactions
+    get_thread_posts_with_reactions,
+    # Функции для работы с каналами
+    parse_channel_id_from_url,
+    get_channel_posts,
+    analyze_channel_emojis,
+    get_posts_without_reactions,
+    get_posts_by_emoji
 )
 
 
@@ -44,23 +53,22 @@ def main():
         help="Личный токен для авторизации в Mattermost API"
     )
     
-    st.subheader("Пост для экспорта")
-    
-    post_input = st.text_input(
-        "URL или ID поста",
-        placeholder="https://mattermost.com/team/pl/post_id или просто post_id",
-        help="Полный URL поста или только его ID"
-    )
-    
     st.divider()
     
     # Создаем вкладки для разных режимов работы
-    tab1, tab2 = st.tabs(["📥 Выгрузить тред", "🎯 Выборочно"])
+    tab1, tab2, tab3 = st.tabs(["📥 Выгрузить тред", "🎯 Выборочно", "📊 Выгрузить канал"])
     
     # Вкладка 1: Выгрузка треда
     with tab1:
         st.markdown("**Режим:** Выгрузка реакций из треда")
         st.markdown("Собирает реакции с root поста и всех replies в треде")
+        
+        post_input = st.text_input(
+            "URL или ID поста",
+            placeholder="https://mattermost.com/team/pl/post_id или просто post_id",
+            help="Полный URL поста или только его ID",
+            key="thread_post_input"
+        )
         
         # Опция включения/исключения replies
         include_replies = st.checkbox(
@@ -177,18 +185,25 @@ def main():
         st.markdown("**Режим:** Выборочная выгрузка по выбранным эмодзи")
         st.markdown("Сначала загрузите список эмодзи, затем выберите нужные для анализа")
         
+        post_input_selective = st.text_input(
+            "URL или ID поста",
+            placeholder="https://mattermost.com/team/pl/post_id или просто post_id",
+            help="Полный URL поста или только его ID",
+            key="selective_post_input"
+        )
+        
         # Шаг 1: Загрузка списка эмодзи
         if st.button("📥 Загрузить список эмодзи", use_container_width=True, key="load_emojis"):
             if not server_url:
                 st.error("⚠️ Укажите URL сервера Mattermost")
             elif not personal_token:
                 st.error("⚠️ Укажите личный токен доступа")
-            elif not post_input:
+            elif not post_input_selective:
                 st.error("⚠️ Укажите URL или ID поста")
             else:
                 with st.spinner("🔄 Загрузка списка эмодзи..."):
                     try:
-                        post_id = parse_post_id(post_input)
+                        post_id = parse_post_id(post_input_selective)
                         st.info(f"📝 Post ID: `{post_id}`")
                         
                         reactions = get_reactions(server_url, personal_token, post_id)
@@ -240,6 +255,217 @@ def main():
                             
                         except Exception as e:
                             st.error(f"❌ Ошибка при обработке: {str(e)}")
+    
+    # Вкладка 3: Выгрузка канала
+    with tab3:
+        st.markdown("**Режим:** Аналитика активности канала")
+        st.markdown("Выгружает все посты из канала за указанный период и анализирует реакции")
+        
+        # Поле для ID/URL канала
+        channel_input = st.text_input(
+            "ID или URL канала",
+            placeholder="https://mattermost.com/team/channels/channel_id или просто channel_id",
+            help="Полный URL канала или только его ID",
+            key="channel_input"
+        )
+        
+        # Date pickers для выбора диапазона дат
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            start_date = st.date_input(
+                "Начальная дата",
+                value=datetime.now().date(),
+                help="Начало периода для анализа"
+            )
+        
+        with col2:
+            end_date = st.date_input(
+                "Конечная дата",
+                value=datetime.now().date(),
+                help="Конец периода для анализа"
+            )
+        
+        # Кнопка загрузки постов
+        if st.button("🔄 Загрузить посты и проанализировать эмодзи", type="primary", use_container_width=True, key="load_channel"):
+            if not server_url:
+                st.error("⚠️ Укажите URL сервера Mattermost")
+            elif not personal_token:
+                st.error("⚠️ Укажите личный токен доступа")
+            elif not channel_input:
+                st.error("⚠️ Укажите ID или URL канала")
+            elif start_date > end_date:
+                st.error("⚠️ Начальная дата не может быть позже конечной")
+            else:
+                with st.spinner("🔄 Загрузка постов из канала..."):
+                    try:
+                        # Парсим ID канала
+                        channel_id = parse_channel_id_from_url(channel_input)
+                        st.info(f"📝 Channel ID: `{channel_id}`")
+                        
+                        # Получаем посты
+                        start_datetime = datetime.combine(start_date, datetime.min.time())
+                        end_datetime = datetime.combine(end_date, datetime.max.time())
+                        
+                        posts = get_channel_posts(
+                            server_url,
+                            personal_token,
+                            channel_id,
+                            start_datetime,
+                            end_datetime
+                        )
+                        
+                        if not posts:
+                            st.warning("ℹ️ Нет постов за указанный период")
+                        else:
+                            st.success(f"✅ Загружено постов: {len(posts)}")
+                            
+                            # Анализируем эмодзи
+                            with st.spinner("🔍 Анализ эмодзи..."):
+                                found_emojis = analyze_channel_emojis(posts)
+                            
+                            st.success(f"✅ Найдено уникальных эмодзи: {len(found_emojis)}")
+                            
+                            # Сохраняем в session_state
+                            st.session_state.channel_posts = posts
+                            st.session_state.found_emojis = found_emojis
+                            st.session_state.channel_id = channel_id
+                            
+                    except ValueError as e:
+                        st.error(f"❌ Ошибка: {str(e)}")
+                    except Exception as e:
+                        st.error(f"❌ Неожиданная ошибка: {str(e)}")
+        
+        # Если посты загружены, показываем опции для выбора эмодзи
+        if 'channel_posts' in st.session_state and st.session_state.channel_posts:
+            st.divider()
+            st.markdown("**Выберите фильтры для анализа:**")
+            
+            # Определяем дефолтные эмодзи
+            default_emojis = ['ballot_box_with_check', 'leaves', 'ice_cube', 'hammer_and_wrench']
+            # Выбираем только те дефолтные эмодзи, которые есть в найденных
+            default_selected = [e for e in default_emojis if e in st.session_state.found_emojis]
+            
+            # Multiselect для выбора эмодзи
+            selected_emojis = st.multiselect(
+                "Эмодзи для анализа",
+                options=st.session_state.found_emojis,
+                default=default_selected,
+                help="Выберите один или несколько эмодзи для отображения статистики",
+                key="channel_emojis"
+            )
+            
+            # Checkbox для показа постов без реакций
+            show_no_reactions = st.checkbox(
+                "Показать посты без реакций",
+                value=False,
+                help="Включить в статистику посты без каких-либо реакций"
+            )
+            
+            # Кнопка "Показать статистику"
+            if st.button("📊 Показать статистику", type="secondary", use_container_width=True, key="show_stats"):
+                if not selected_emojis and not show_no_reactions:
+                    st.warning("⚠️ Выберите хотя бы один эмодзи или включите опцию 'Показать посты без реакций'")
+                else:
+                    st.divider()
+                    st.subheader("📊 Статистика")
+                    
+                    # Сохраняем выбор в session_state
+                    st.session_state.selected_emojis = selected_emojis
+                    st.session_state.show_no_reactions = show_no_reactions
+                    
+                    # Общая статистика
+                    total_posts = len(st.session_state.channel_posts)
+                    posts_with_reactions = [p for p in st.session_state.channel_posts if p.get('metadata', {}).get('reactions')]
+                    posts_without_reactions = get_posts_without_reactions(st.session_state.channel_posts)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Всего постов", total_posts)
+                    with col2:
+                        st.metric("С реакциями", len(posts_with_reactions))
+                    with col3:
+                        st.metric("Без реакций", len(posts_without_reactions))
+                    
+                    st.divider()
+                    
+                    # Таблица с подсчетом эмодзи
+                    if selected_emojis:
+                        st.markdown("### Сводка по эмодзи")
+                        emoji_summary = {}
+                        
+                        for emoji in selected_emojis:
+                            posts_with_emoji = get_posts_by_emoji(st.session_state.channel_posts, emoji)
+                            total_reactions = sum(p.get('emoji_count', 0) for p in posts_with_emoji)
+                            emoji_summary[f":{emoji}:"] = {
+                                "Постов": len(posts_with_emoji),
+                                "Всего реакций": total_reactions
+                            }
+                        
+                        # Отображаем таблицу
+                        df = pd.DataFrame(emoji_summary).T
+                        st.dataframe(df, use_container_width=True)
+                        
+                        st.divider()
+                    
+                    # Статистика по каждому выбранному эмодзи
+                    for emoji in selected_emojis:
+                        posts_with_emoji = get_posts_by_emoji(st.session_state.channel_posts, emoji)
+                        
+                        with st.expander(f":{emoji}: — {len(posts_with_emoji)} постов", expanded=True):
+                            if not posts_with_emoji:
+                                st.info("Нет постов с этой реакцией")
+                            else:
+                                for post in posts_with_emoji[:50]:  # Ограничиваем 50 постами
+                                    # Получаем информацию о посте
+                                    message = post.get('message', '')
+                                    user_id = post.get('user_id', 'unknown')
+                                    post_id = post.get('id', '')
+                                    create_at = post.get('create_at', 0)
+                                    emoji_count = post.get('emoji_count', 0)
+                                    
+                                    # Форматируем дату
+                                    if create_at:
+                                        post_date = datetime.fromtimestamp(create_at / 1000).strftime('%Y-%m-%d %H:%M')
+                                    else:
+                                        post_date = 'Unknown'
+                                    
+                                    # Отображаем информацию
+                                    st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date} | **Реакций:** {emoji_count}")
+                                    st.markdown(f"**Текст:** {message[:200]}{'...' if len(message) > 200 else ''}")
+                                    st.markdown(f"**ID поста:** `{post_id}`")
+                                    st.markdown("---")
+                                
+                                if len(posts_with_emoji) > 50:
+                                    st.info(f"Показано первых 50 из {len(posts_with_emoji)} постов")
+                    
+                    # Посты без реакций
+                    if show_no_reactions:
+                        with st.expander(f"📭 Посты без реакций — {len(posts_without_reactions)} постов", expanded=True):
+                            if not posts_without_reactions:
+                                st.info("Нет постов без реакций")
+                            else:
+                                for post in posts_without_reactions[:50]:  # Ограничиваем 50 постами
+                                    # Получаем информацию о посте
+                                    message = post.get('message', '')
+                                    user_id = post.get('user_id', 'unknown')
+                                    post_id = post.get('id', '')
+                                    create_at = post.get('create_at', 0)
+                                    
+                                    # Форматируем дату
+                                    if create_at:
+                                        post_date = datetime.fromtimestamp(create_at / 1000).strftime('%Y-%m-%d %H:%M')
+                                    else:
+                                        post_date = 'Unknown'
+                                    
+                                    # Отображаем информацию
+                                    st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date}")
+                                    st.markdown(f"**Текст:** {message[:200]}{'...' if len(message) > 200 else ''}")
+                                    st.markdown(f"**ID поста:** `{post_id}`")
+                                    st.markdown("---")
+                                
+                                if len(posts_without_reactions) > 50:
+                                    st.info(f"Показано первых 50 из {len(posts_without_reactions)} постов")
 
 
 if __name__ == "__main__":
