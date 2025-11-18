@@ -62,7 +62,7 @@ def main():
     st.divider()
     
     # Создаем вкладки для разных режимов работы
-    tab1, tab2, tab3 = st.tabs(["📥 Выгрузить тред", "🎯 Выборочно", "📊 Выгрузить канал"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📥 Выгрузить тред", "🎯 Выборочно", "📊 Выгрузить канал", "🚀 Выгрузить тред 2.0"])
     
     # Вкладка 1: Выгрузка треда
     with tab1:
@@ -574,6 +574,120 @@ def main():
                             
                             if len(posts_without_reactions) > 50:
                                 st.info(f"Показано первых 50 из {len(posts_without_reactions)} постов")
+    
+    # Вкладка 4: Выгрузить тред 2.0 (объединение tab1 и tab2)
+    with tab4:
+        st.markdown("**Режим:** Выгрузка реакций из треда с возможностью выборочной фильтрации")
+        st.markdown("Объединяет функциональность выгрузки треда и выборочной фильтрации по эмодзи")
+        
+        post_input_v2 = st.text_input(
+            "URL или ID поста",
+            placeholder="https://mattermost.com/team/pl/post_id или просто post_id",
+            help="Полный URL поста или только его ID",
+            key="thread_v2_post_input"
+        )
+        
+        # Опция включения/исключения replies
+        include_replies_v2 = st.checkbox(
+            "Включить реакции из replies",
+            value=True,
+            help="Если отключено, будут собраны реакции только с root поста",
+            key="include_replies_v2"
+        )
+        
+        # Опция выборочной выгрузки по эмодзи
+        selective_mode = st.checkbox(
+            "Выборочная выгрузка по эмодзи",
+            value=False,
+            help="Если включено, можно выбрать конкретные эмодзи для анализа",
+            key="selective_mode_v2"
+        )
+        
+        # Кнопка для загрузки треда (или списка эмодзи в выборочном режиме)
+        button_label = "📥 Загрузить список эмодзи" if selective_mode else "🚀 Выгрузить реакции"
+        
+        if st.button(button_label, type="primary", use_container_width=True, key="thread_v2_load"):
+            if not server_url:
+                st.error("⚠️ Укажите URL сервера Mattermost")
+            elif not personal_token:
+                st.error("⚠️ Укажите личный токен доступа")
+            elif not post_input_v2:
+                st.error("⚠️ Укажите URL или ID поста")
+            else:
+                with st.spinner("🔄 Получение данных из треда..."):
+                    try:
+                        post_id = parse_post_id(post_input_v2)
+                        st.info(f"📝 Post ID: `{post_id}`")
+                        
+                        # Получаем реакции из треда
+                        reactions_v2 = get_thread_reactions(
+                            server_url, 
+                            personal_token, 
+                            post_id, 
+                            include_replies=include_replies_v2
+                        )
+                        
+                        if not reactions_v2:
+                            st.warning("ℹ️ Нет реакций")
+                        else:
+                            st.success(f"✅ Найдено реакций: {len(reactions_v2)}")
+                            
+                            # Если выборочный режим - загружаем список эмодзи
+                            if selective_mode:
+                                unique_emojis_v2 = get_unique_emojis(reactions_v2)
+                                st.session_state.reactions_v2 = reactions_v2
+                                st.session_state.unique_emojis_v2 = unique_emojis_v2
+                                st.success(f"✅ Найдено уникальных эмодзи: {len(unique_emojis_v2)}")
+                            else:
+                                # Обычный режим - сразу обрабатываем все реакции
+                                with st.spinner("🔄 Получение данных пользователей..."):
+                                    emoji_data_v2 = process_reactions(server_url, personal_token, reactions_v2)
+                                
+                                st.success(f"✅ Обработано уникальных эмодзи: {len(emoji_data_v2)}")
+                                
+                                st.subheader("📊 Результат")
+                                st.json(emoji_data_v2)
+                        
+                    except ValueError as e:
+                        st.error(f"❌ Ошибка: {str(e)}")
+                    except Exception as e:
+                        st.error(f"❌ Неожиданная ошибка: {str(e)}")
+        
+        # Если выборочный режим включен и эмодзи загружены - показываем мультиселект
+        if selective_mode and 'unique_emojis_v2' in st.session_state and st.session_state.unique_emojis_v2:
+            st.divider()
+            st.markdown("**Выберите эмодзи для анализа:**")
+            
+            # Используем мультиселект для выбора эмодзи
+            selected_emojis_v2 = st.multiselect(
+                "Эмодзи",
+                options=st.session_state.unique_emojis_v2,
+                default=st.session_state.unique_emojis_v2,
+                help="Выберите один или несколько эмодзи для получения статистики",
+                key="selected_emojis_v2"
+            )
+            
+            # Кнопка для обработки выбранных эмодзи
+            if st.button("🚀 Получить реакции по выбранным эмодзи", type="primary", use_container_width=True, key="process_selected_v2"):
+                if not selected_emojis_v2:
+                    st.warning("⚠️ Выберите хотя бы один эмодзи")
+                else:
+                    with st.spinner("🔄 Получение данных пользователей..."):
+                        try:
+                            emoji_data_v2 = process_reactions(
+                                server_url, 
+                                personal_token, 
+                                st.session_state.reactions_v2,
+                                emoji_filter=selected_emojis_v2
+                            )
+                            
+                            st.success(f"✅ Обработано эмодзи: {len(emoji_data_v2)}")
+                            
+                            st.subheader("📊 Результат")
+                            st.json(emoji_data_v2)
+                            
+                        except Exception as e:
+                            st.error(f"❌ Ошибка при обработке: {str(e)}")
 
 
 if __name__ == "__main__":
