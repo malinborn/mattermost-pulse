@@ -14,7 +14,8 @@ from mattermost_api import (
     filter_root_posts_only,
     filter_system_messages,
     enrich_posts_with_thread_reactions,
-    generate_post_link
+    generate_post_link,
+    get_user_info
 )
 
 
@@ -130,7 +131,6 @@ def _load_and_analyze_channel(server_url, personal_token, channel_input, start_d
                 st.session_state.channel_id = channel_id
                 st.session_state.include_thread_reactions = include_thread_reactions
                 st.session_state.team_name = team_name
-                st.session_state.server_url = server_url
                 
         except ValueError as e:
             st.error(f"❌ Ошибка: {str(e)}")
@@ -300,6 +300,14 @@ def _display_posts_list(posts_list):
         post_id = post.get('id', '')
         create_at = post.get('create_at', 0)
         
+        # Получаем информацию о пользователе
+        user_info = get_user_info(
+            st.session_state.server_url,
+            st.session_state.personal_token,
+            user_id
+        )
+        author_name = user_info.get('username') or user_info.get('email') or user_id
+        
         if create_at:
             post_date = datetime.fromtimestamp(create_at / 1000).strftime('%Y-%m-%d %H:%M')
         else:
@@ -311,7 +319,7 @@ def _display_posts_list(posts_list):
             post_id
         )
         
-        st.markdown(f"**Автор:** `{user_id}` | **Дата:** {post_date}")
+        st.markdown(f"`{author_name}` | **Дата:** {post_date}")
         st.markdown(f"**Текст:** {message[:200]}{'...' if len(message) > 200 else ''}")
         st.markdown(f"**Ссылка:** [{post_id}]({post_link})")
         st.markdown("---")

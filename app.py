@@ -34,6 +34,10 @@ def main():
         help="Личный токен для авторизации в Mattermost API"
     )
     
+    # Сохраняем в session_state для использования во всех вкладках
+    st.session_state.server_url = server_url
+    st.session_state.personal_token = personal_token
+    
     st.divider()
     
     # Вкладки
