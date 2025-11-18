@@ -446,49 +446,36 @@ def main():
                     }
                     st.session_state.categories = categories
                     
-                    # Общая статистика
+                    # Подсчет статистики
                     total_posts = len(st.session_state.channel_posts)
-                    posts_with_reactions = [p for p in st.session_state.channel_posts if p.get('metadata', {}).get('reactions')]
                     posts_without_reactions = get_posts_without_reactions(st.session_state.channel_posts)
                     
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Всего постов", total_posts)
-                    with col2:
-                        st.metric("С реакциями", len(posts_with_reactions))
-                    with col3:
-                        st.metric("Без реакций", len(posts_without_reactions))
-                    
-                    st.divider()
-                    
-                    # Таблица с подсчетом по категориям
-                    st.markdown("### Сводка по категориям")
-                    
-                    category_data = []
+                    # Подсчет постов по категориям
+                    category_counts = {}
                     for category_name, emojis in categories.items():
-                        if emojis:  # Только если в категории есть эмодзи
-                            # Собираем все посты для всех эмодзи в категории
-                            category_posts = set()
-                            total_reactions_count = 0
-                            
+                        category_posts = set()
+                        if emojis:
                             for emoji in emojis:
                                 posts_with_emoji = get_posts_by_emoji(st.session_state.channel_posts, emoji)
                                 for post in posts_with_emoji:
                                     category_posts.add(post['id'])
-                                    total_reactions_count += post.get('emoji_count', 0)
-                            
-                            category_data.append({
-                                'Категория': category_name,
-                                'Эмодзи': ', '.join([f':{e}:' for e in emojis]),
-                                'Постов': len(category_posts),
-                                'Всего реакций': total_reactions_count
-                            })
+                        category_counts[category_name] = len(category_posts)
                     
-                    if category_data:
-                        df = pd.DataFrame(category_data)
-                        st.dataframe(df, use_container_width=True, hide_index=True)
-                        
-                        st.divider()
+                    # Статистика в метриках
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    
+                    with col1:
+                        st.metric("Всего постов", total_posts)
+                    with col2:
+                        st.metric("✅ Done", category_counts.get('Done', 0))
+                    with col3:
+                        st.metric("🔧 In Progress", category_counts.get('In Progress', 0))
+                    with col4:
+                        st.metric("👁️ Control", category_counts.get('Control', 0))
+                    with col5:
+                        st.metric("📭 Нет реакций", len(posts_without_reactions))
+                    
+                    st.divider()
                     
                     # Статистика по каждой категории
                     for category_name, emojis in categories.items():
