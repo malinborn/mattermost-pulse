@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  streamlit-app:
+    # Используем образ из GitHub Container Registry
+    image: ghcr.io/malinborn/mattermost-pulse:latest
+    container_name: my-streamlit-app
+    restart: always
+    ports:
+      - "8501:8501"
+    # В продакшене обычно не маунтят код локально, но можно оставить env файлы или volume для данных
+    environment:
+      - TZ=Europe/Moscow

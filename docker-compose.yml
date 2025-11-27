@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  streamlit-app:
+    build: .
+    container_name: my-streamlit-app
+    restart: always
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./:/app
+    environment:
+      - TZ=Europe/Moscow
