@@ -1,8 +1,11 @@
 """
 Вкладка для массовой рассылки сообщений пользователям
 """
+import os
+import time
 import streamlit as st
 from mattermost_api import broadcast_message
+from ai_helper import improve_message_text
 
 
 def render_broadcast_tab(server_url: str, personal_token: str, product_name: str = "Mattermost"):
@@ -72,6 +75,12 @@ def render_broadcast_tab(server_url: str, personal_token: str, product_name: str
     # Сообщение
     st.subheader("2️⃣ Текст сообщения")
     
+    # Инициализируем хранилище для улучшенного текста
+    if 'ai_improved_text' not in st.session_state:
+        st.session_state.ai_improved_text = None
+    if 'show_ai_result' not in st.session_state:
+        st.session_state.show_ai_result = False
+    
     message_text = st.text_area(
         "Напишите сообщение для отправки",
         placeholder="Введите текст сообщения...",
@@ -79,6 +88,57 @@ def render_broadcast_tab(server_url: str, personal_token: str, product_name: str
         help="Это сообщение будет отправлено в личные сообщения каждому получателю",
         key="message_text_input"
     )
+    
+    # AI улучшение текста
+    if message_text:
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("✨ Улучшить с AI", help="Улучшить текст сообщения с помощью AI", key="improve_ai_btn"):
+                openai_api_key = os.getenv("OPENAI_API_KEY")
+                
+                if not openai_api_key:
+                    st.error("🔑 Не найден API ключ OpenAI. Установите переменную окружения OPENAI_API_KEY")
+                else:
+                    with st.spinner("🤖 AI улучшает ваше сообщение..."):
+                        try:
+                            improved_text = improve_message_text(message_text, openai_api_key)
+                            st.session_state.ai_improved_text = improved_text
+                            st.session_state.show_ai_result = True
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Ошибка при улучшении текста: {str(e)}")
+    
+    # Показываем результат AI-улучшения
+    if st.session_state.show_ai_result and st.session_state.ai_improved_text:
+        st.markdown("---")
+        st.markdown("### 🤖 AI-улучшенная версия")
+        
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            st.markdown("**📋 Markdown (для копирования)**")
+            # Используем уникальный ключ с timestamp для обновления при каждом изменении
+            unique_key = f"ai_improved_markdown_{int(time.time() * 1000)}"
+            st.text_area(
+                "Улучшенный текст",
+                value=st.session_state.ai_improved_text,
+                height=250,
+                key=unique_key,
+                label_visibility="collapsed"
+            )
+            
+            # Кнопка закрытия
+            if st.button("❌ Закрыть", help="Скрыть результат AI", key="close_ai_btn"):
+                st.session_state.show_ai_result = False
+                st.session_state.ai_improved_text = None
+                st.rerun()
+        
+        with col_right:
+            st.markdown("**👁️ Предпросмотр (как в Mattermost)**")
+            # Рендерим markdown напрямую без лишних контейнеров
+            st.markdown(st.session_state.ai_improved_text)
+        
+        st.markdown("---")
     
     # Предпросмотр
     if message_text:
