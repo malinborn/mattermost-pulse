@@ -19,14 +19,14 @@ from mattermost_api import (
 )
 
 
-def render_channel_tab(server_url: str, personal_token: str):
+def render_channel_tab(server_url: str, personal_token: str, product_name: str = "Mattermost"):
     """Отображает вкладку выгрузки канала"""
     st.markdown("**Режим:** Аналитика активности канала")
     st.markdown("Выгружает все посты из канала за указанный период и анализирует реакции")
     
     channel_input = st.text_input(
         "ID или URL канала",
-        placeholder="https://mattermost.com/team/channels/channel_id или просто channel_id",
+        placeholder=f"https://{product_name.lower()}-server.com/team/channels/channel_id или просто channel_id",
         help="Полный URL канала или только его ID",
         key="channel_input"
     )
@@ -56,7 +56,7 @@ def render_channel_tab(server_url: str, personal_token: str):
     
     if st.button("🔄 Загрузить посты и проанализировать эмодзи", type="primary", use_container_width=True, key="load_channel"):
         if not server_url:
-            st.error("⚠️ Укажите URL сервера Mattermost")
+            st.error(f"⚠️ Укажите URL сервера {product_name}")
         elif not personal_token:
             st.error("⚠️ Укажите личный токен доступа")
         elif not channel_input:

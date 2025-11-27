@@ -11,3 +11,6 @@ services:
       - ./:/app
     environment:
       - TZ=Europe/Moscow
+      - MATTERMOST_URL=${MATTERMOST_URL:-}
+      - PRODUCT_NAME=${PRODUCT_NAME:-Mattermost}
+      - MATTERMOST_PERSONAL_TOKEN=${MATTERMOST_PERSONAL_TOKEN:-}

@@ -5,7 +5,7 @@ import streamlit as st
 from mattermost_api import broadcast_message
 
 
-def render_broadcast_tab(server_url: str, personal_token: str):
+def render_broadcast_tab(server_url: str, personal_token: str, product_name: str = "Mattermost"):
     """Отображает вкладку массовой рассылки сообщений"""
     st.markdown("**Режим:** Массовая рассылка личных сообщений")
     st.markdown("Отправляет личные сообщения списку пользователей от вашего имени")

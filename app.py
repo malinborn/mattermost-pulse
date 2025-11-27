@@ -13,48 +13,52 @@ def main():
     st.set_page_config(
         page_title="Mattermost Reactions Exporter",
         page_icon="📊",
-        layout="centered"
+        layout="wide"
     )
     
-    st.title("📊 Mattermost post analyzer")
-    st.markdown("Получает реакции из поста или канала Mattermost и показывает данные в удобном формате")
-    
-    with st.expander("ℹ️ Как получить токен доступа (Personal Access Token)?"):
-        st.markdown("""
-        1. Нажмите на свое фото профиля в правом верхнем углу Mattermost.
-        2. Выберите **Profile** (Профиль).
-        3. Перейдите в раздел **Security** (Безопасность).
-        4. Найдите раздел **Personal Access Tokens** и нажмите **Create Token**.
-        5. Введите описание токена и нажмите **Save**.
-        6. Скопируйте полученный токен и вставьте его в поле ниже.
+    # Sidebar for configuration
+    with st.sidebar:
+        st.header("Настройки подключения")
         
-        *Если вы не видите раздел Personal Access Tokens, обратитесь к администратору сервера.*
-        """)
-    
-    # Проверяем переменную среды для токена
-    env_token = os.getenv("MATTERMOST_PERSONAL_TOKEN", "")
-    
-    # Общие настройки подключения
-    st.subheader("Настройки подключения")
-    
-    server_url = st.text_input(
-        "URL сервера Mattermost",
-        value="https://dodobrands.loop.ru",
-        placeholder="https://your-mattermost-server.com",
-        help="URL сервера Mattermost (с https://)"
-    )
-    
-    personal_token = st.text_input(
-        "Личный токен доступа",
-        value=env_token,
-        type="password",
-        placeholder="Введите ваш личный токен",
-        help="Личный токен для авторизации в Mattermost API (или установите переменную среды MATTERMOST_PERSONAL_TOKEN)"
-    )
+        # Проверяем переменную среды для токена и других настроек
+        env_token = os.getenv("MATTERMOST_PERSONAL_TOKEN", "")
+        env_server_url = os.getenv("MATTERMOST_URL", "")
+        product_name = os.getenv("PRODUCT_NAME", "Mattermost")
+        
+        server_url = st.text_input(
+            f"URL сервера {product_name}",
+            value=env_server_url,
+            placeholder=f"https://your-{product_name.lower()}-server.com",
+            help=f"URL сервера {product_name} (с https://)"
+        )
+        
+        personal_token = st.text_input(
+            "Личный токен доступа",
+            value=env_token,
+            type="password",
+            placeholder="Введите ваш личный токен",
+            help=f"Личный токен для авторизации в {product_name} API (или установите переменную среды MATTERMOST_PERSONAL_TOKEN)"
+        )
+        
+        with st.expander("ℹ️ Как получить токен?"):
+            st.markdown(f"""
+            1. Нажмите на фото профиля (справа сверху).
+            2. Выберите **Profile** -> **Security**.
+            3. В **Personal Access Tokens** нажмите **Create Token**.
+            4. Введите описание и **Save**.
+            5. Скопируйте токен.
+            
+            *Если нет раздела, обратитесь к администратору.*
+            """)
+
+    # Main area
+    st.title(f"📊 {product_name} post analyzer")
+    st.markdown(f"Получает реакции из поста или канала {product_name} и показывает данные в удобном формате")
     
     # Сохраняем в session_state для использования во всех вкладках
     st.session_state.server_url = server_url
     st.session_state.personal_token = personal_token
+    st.session_state.product_name = product_name
     
     st.divider()
     
@@ -62,13 +66,13 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📥 Выгрузить тред", "📊 Выгрузить канал", "✉️ Рассылка"])
     
     with tab1:
-        render_thread_tab(server_url, personal_token)
+        render_thread_tab(server_url, personal_token, product_name)
     
     with tab2:
-        render_channel_tab(server_url, personal_token)
+        render_channel_tab(server_url, personal_token, product_name)
     
     with tab3:
-        render_broadcast_tab(server_url, personal_token)
+        render_broadcast_tab(server_url, personal_token, product_name)
 
 
 if __name__ == "__main__":

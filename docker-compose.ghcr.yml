@@ -7,7 +7,10 @@ services:
     container_name: my-streamlit-app
     restart: always
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     # В продакшене обычно не маунтят код локально, но можно оставить env файлы или volume для данных
     environment:
       - TZ=Europe/Moscow
+      - MATTERMOST_URL=${MATTERMOST_URL:-}
+      - PRODUCT_NAME=${PRODUCT_NAME:-Mattermost}
+      - MATTERMOST_PERSONAL_TOKEN=${MATTERMOST_PERSONAL_TOKEN:-}

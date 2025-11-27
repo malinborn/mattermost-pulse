@@ -11,14 +11,14 @@ from mattermost_api import (
 )
 
 
-def render_thread_tab(server_url: str, personal_token: str):
+def render_thread_tab(server_url: str, personal_token: str, product_name: str = "Mattermost"):
     """Отображает вкладку выгрузки треда"""
     st.markdown("**Режим:** Выгрузка реакций из треда с возможностью выборочной фильтрации")
     st.markdown("Объединяет функциональность выгрузки треда и выборочной фильтрации по эмодзи")
     
     post_input_v2 = st.text_input(
         "URL или ID поста",
-        placeholder="https://mattermost.com/team/pl/post_id или просто post_id",
+        placeholder=f"https://{product_name.lower()}-server.com/team/pl/post_id или просто post_id",
         help="Полный URL поста или только его ID",
         key="thread_v2_post_input"
     )
@@ -50,7 +50,7 @@ def render_thread_tab(server_url: str, personal_token: str):
     
     if st.button(button_label, type="primary", use_container_width=True, key="thread_v2_load"):
         if not server_url:
-            st.error("⚠️ Укажите URL сервера Mattermost")
+            st.error(f"⚠️ Укажите URL сервера {product_name}")
         elif not personal_token:
             st.error("⚠️ Укажите личный токен доступа")
         elif not post_input_v2:
