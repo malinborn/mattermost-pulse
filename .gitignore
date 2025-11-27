@@ -38,3 +38,8 @@ Thumbs.db
 
 # Streamlit
 .streamlit/
+
+# Security scanning reports
+gitleaks-report.json
+*.env
+.env.*
