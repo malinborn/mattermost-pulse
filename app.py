@@ -4,7 +4,7 @@ Mattermost Reactions Exporter
 """
 import os
 import streamlit as st
-from streamlit_local_storage import LocalStorage
+import extra_streamlit_components as stx
 from tabs.thread_tab import render_thread_tab
 from tabs.channel_tab import render_channel_tab
 from tabs.broadcast_tab import render_broadcast_tab
@@ -21,20 +21,30 @@ def main():
     with st.sidebar:
         st.header("Настройки подключения")
         
-        # Инициализируем Local Storage
-        ls = LocalStorage()
+        # Инициализируем Cookie Manager
+        # Используем декоратор, чтобы не пересоздавать менеджер при каждом реренедере
+        @st.cache_resource(experimental_allow_widgets=True)
+        def get_manager():
+            return stx.CookieManager()
+
+        cookie_manager = get_manager()
         
         # Проверяем переменную среды для токена и других настроек
         env_token = os.getenv("MATTERMOST_PERSONAL_TOKEN", "")
         env_server_url = os.getenv("MATTERMOST_URL", "")
         product_name = os.getenv("PRODUCT_NAME", "Mattermost")
         
-        # Получаем сохраненные значения (если нет переменных окружения)
-        # ВАЖНО: ls.getItem может вернуть None при первом рендере
-        ls_token = ls.getItem("mm_token") or ""
-        ls_url = ls.getItem("mm_url") or ""
+        # Получаем сохраненные значения из кук
+        # ВАЖНО: get() возвращает куки, но может вернуть None пока они грузятся
+        cookies = cookie_manager.get_all()
+        ls_token = cookies.get("mm_token") if cookies else ""
+        ls_url = cookies.get("mm_url") if cookies else ""
         
-        # Определяем дефолтные значения: Env Var > Local Storage > Empty
+        # Если куки еще не загрузились, считаем их пустыми (избегаем None)
+        if ls_token is None: ls_token = ""
+        if ls_url is None: ls_url = ""
+        
+        # Определяем дефолтные значения: Env Var > Cookies > Empty
         default_url = env_server_url if env_server_url else ls_url
         default_token = env_token if env_token else ls_token
         
@@ -46,9 +56,9 @@ def main():
             key="server_url_input"
         )
         
-        # Сохраняем в LS при изменении (если значение отличается от сохраненного)
+        # Сохраняем в куки при изменении
         if server_url and server_url != ls_url:
-            ls.setItem("mm_url", server_url)
+            cookie_manager.set("mm_url", server_url, key="set_url_cookie")
         
         personal_token = st.text_input(
             "Личный токен доступа",
@@ -59,9 +69,9 @@ def main():
             key="personal_token_input"
         )
 
-        # Сохраняем токен в LS
+        # Сохраняем токен в куки
         if personal_token and personal_token != ls_token:
-            ls.setItem("mm_token", personal_token)
+            cookie_manager.set("mm_token", personal_token, key="set_token_cookie")
         
         with st.expander("ℹ️ Как получить токен?"):
             st.markdown(f"""
