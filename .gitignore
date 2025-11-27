@@ -24,6 +24,7 @@ wheels/
 venv/
 env/
 ENV/
+.my_deploy/
 
 # IDE
 .vscode/
@@ -43,3 +44,4 @@ Thumbs.db
 gitleaks-report.json
 *.env
 .env.*
+
