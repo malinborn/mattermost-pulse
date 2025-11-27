@@ -6,6 +6,7 @@ import os
 import streamlit as st
 from tabs.thread_tab import render_thread_tab
 from tabs.channel_tab import render_channel_tab
+from tabs.broadcast_tab import render_broadcast_tab
 
 
 def main():
@@ -46,13 +47,16 @@ def main():
     st.divider()
     
     # Вкладки
-    tab1, tab2 = st.tabs(["📥 Выгрузить тред", "📊 Выгрузить канал"])
+    tab1, tab2, tab3 = st.tabs(["📥 Выгрузить тред", "📊 Выгрузить канал", "✉️ Рассылка"])
     
     with tab1:
         render_thread_tab(server_url, personal_token)
     
     with tab2:
         render_channel_tab(server_url, personal_token)
+    
+    with tab3:
+        render_broadcast_tab(server_url, personal_token)
 
 
 if __name__ == "__main__":

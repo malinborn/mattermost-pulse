@@ -587,3 +587,186 @@ def enrich_posts_with_thread_reactions(server_url: str, token: str, posts: list)
         enriched_posts.append(enriched_post)
     
     return enriched_posts
+
+
+# ============================================================================
+# Функции для отправки сообщений
+# ============================================================================
+
+def get_user_id_by_identifier(server_url: str, token: str, identifier: str) -> Optional[str]:
+    """
+    Получает user_id по email или username.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        identifier: Email или username пользователя
+        
+    Returns:
+        str: user_id или None, если пользователь не найден
+    """
+    # Сначала пробуем найти по email
+    api_url = f"{server_url.rstrip('/')}/api/v4/users/email/{identifier}"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(api_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json().get('id')
+    except requests.exceptions.RequestException:
+        pass
+    
+    # Если не нашли по email, пробуем по username
+    api_url = f"{server_url.rstrip('/')}/api/v4/users/username/{identifier}"
+    
+    try:
+        response = requests.get(api_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json().get('id')
+    except requests.exceptions.RequestException:
+        pass
+    
+    return None
+
+
+def create_direct_channel(server_url: str, token: str, user_id1: str, user_id2: str) -> Optional[str]:
+    """
+    Создает или получает существующий Direct Message канал между двумя пользователями.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        user_id1: ID первого пользователя (отправитель)
+        user_id2: ID второго пользователя (получатель)
+        
+    Returns:
+        str: ID канала или None при ошибке
+    """
+    api_url = f"{server_url.rstrip('/')}/api/v4/channels/direct"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    data = [user_id1, user_id2]
+    
+    try:
+        response = requests.post(api_url, headers=headers, json=data, timeout=10)
+        response.raise_for_status()
+        return response.json().get('id')
+    except requests.exceptions.RequestException:
+        return None
+
+
+def send_message_to_channel(server_url: str, token: str, channel_id: str, message: str) -> bool:
+    """
+    Отправляет сообщение в указанный канал.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        channel_id: ID канала
+        message: Текст сообщения
+        
+    Returns:
+        bool: True если успешно, False при ошибке
+    """
+    api_url = f"{server_url.rstrip('/')}/api/v4/posts"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "channel_id": channel_id,
+        "message": message
+    }
+    
+    try:
+        response = requests.post(api_url, headers=headers, json=data, timeout=10)
+        response.raise_for_status()
+        return True
+    except requests.exceptions.RequestException:
+        return False
+
+
+def send_direct_message(server_url: str, token: str, sender_id: str, recipient_identifier: str, message: str) -> dict:
+    """
+    Отправляет прямое сообщение пользователю.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        sender_id: ID отправителя (ваш user_id)
+        recipient_identifier: Email или username получателя
+        message: Текст сообщения
+        
+    Returns:
+        dict: {'success': bool, 'recipient': str, 'error': str (опционально)}
+    """
+    # Получаем user_id получателя
+    recipient_id = get_user_id_by_identifier(server_url, token, recipient_identifier)
+    
+    if not recipient_id:
+        return {
+            'success': False,
+            'recipient': recipient_identifier,
+            'error': 'Пользователь не найден'
+        }
+    
+    # Создаем/получаем DM канал
+    channel_id = create_direct_channel(server_url, token, sender_id, recipient_id)
+    
+    if not channel_id:
+        return {
+            'success': False,
+            'recipient': recipient_identifier,
+            'error': 'Не удалось создать DM канал'
+        }
+    
+    # Отправляем сообщение
+    success = send_message_to_channel(server_url, token, channel_id, message)
+    
+    return {
+        'success': success,
+        'recipient': recipient_identifier,
+        'error': None if success else 'Не удалось отправить сообщение'
+    }
+
+
+def broadcast_message(server_url: str, token: str, sender_id: str, recipients: list[str], message: str) -> dict:
+    """
+    Отправляет сообщение списку пользователей.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        sender_id: ID отправителя (ваш user_id)
+        recipients: Список email/username получателей
+        message: Текст сообщения для отправки
+        
+    Returns:
+        dict: {
+            'total': int,
+            'successful': int,
+            'failed': int,
+            'results': list[dict]  # Детальные результаты для каждого получателя
+        }
+    """
+    results = []
+    successful = 0
+    failed = 0
+    
+    for recipient in recipients:
+        result = send_direct_message(server_url, token, sender_id, recipient, message)
+        results.append(result)
+        
+        if result['success']:
+            successful += 1
+        else:
+            failed += 1
+    
+    return {
+        'total': len(recipients),
+        'successful': successful,
+        'failed': failed,
+        'results': results
+    }
