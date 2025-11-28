@@ -74,6 +74,7 @@ def _display_users_table(members):
         first_name = user.get('first_name', '')
         last_name = user.get('last_name', '')
         username = user.get('username', '')
+        position = user.get('position', '')
         
         # Формируем full name
         full_name = f"{first_name} {last_name}".strip()
@@ -83,7 +84,8 @@ def _display_users_table(members):
         table_data.append({
             '№': idx,
             'Email': email,
-            'Full Name': full_name
+            'Full Name': full_name,
+            'Position': position
         })
     
     # Создаем DataFrame
@@ -109,6 +111,11 @@ def _display_users_table(members):
                 'Full Name',
                 width='medium',
                 help='Полное имя пользователя'
+            ),
+            'Position': st.column_config.TextColumn(
+                'Position',
+                width='medium',
+                help='Должность пользователя'
             )
         }
     )
