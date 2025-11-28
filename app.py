@@ -8,6 +8,7 @@ import extra_streamlit_components as stx
 from tabs.thread_tab import render_thread_tab
 from tabs.channel_tab import render_channel_tab
 from tabs.broadcast_tab import render_broadcast_tab
+from tabs.users_tab import render_users_tab
 
 
 def main():
@@ -138,7 +139,7 @@ def main():
     st.divider()
     
     # Вкладки
-    tab1, tab2, tab3 = st.tabs(["📥 Выгрузить тред", "📊 Выгрузить канал", "✉️ Рассылка"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📥 Выгрузить тред", "📊 Выгрузить канал", "✉️ Рассылка", "👥 Пользователи канала"])
     
     with tab1:
         render_thread_tab(server_url, personal_token, product_name)
@@ -148,6 +149,9 @@ def main():
     
     with tab3:
         render_broadcast_tab(server_url, personal_token, product_name)
+    
+    with tab4:
+        render_users_tab(server_url, personal_token, product_name)
 
 
 if __name__ == "__main__":

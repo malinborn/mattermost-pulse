@@ -313,6 +313,69 @@ def get_channel_info(server_url: str, token: str, channel_id: str) -> dict:
         return {}
 
 
+def get_channel_members(server_url: str, token: str, channel_id: str, per_page: int = 200) -> list:
+    """
+    Получает список членов канала с их полной информацией.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        channel_id: ID канала
+        per_page: Количество членов на страницу (макс 200)
+        
+    Returns:
+        list: Список словарей с информацией о пользователях
+    """
+    all_members = []
+    page = 0
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    while True:
+        api_url = f"{server_url.rstrip('/')}/api/v4/channels/{channel_id}/members"
+        params = {
+            'page': page,
+            'per_page': per_page
+        }
+        
+        try:
+            response = requests.get(api_url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            members_batch = response.json()
+            
+            if not members_batch:
+                break
+            
+            # Получаем полную информацию о каждом пользователе
+            for member in members_batch:
+                user_id = member.get('user_id')
+                if user_id:
+                    user_info = get_user_info(server_url, token, user_id)
+                    if user_info:
+                        all_members.append(user_info)
+            
+            # Если получили меньше чем per_page, значит это последняя страница
+            if len(members_batch) < per_page:
+                break
+            
+            page += 1
+            
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 401:
+                raise ValueError("Невалидный токен доступа")
+            elif response.status_code == 403:
+                raise ValueError("Нет прав доступа к каналу")
+            elif response.status_code == 404:
+                raise ValueError("Канал не найден")
+            else:
+                raise ValueError(f"Ошибка API: {response.status_code} - {response.text}")
+        except requests.exceptions.Timeout:
+            raise ValueError("Превышено время ожидания ответа от сервера")
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Ошибка подключения: {str(e)}")
+    
+    return all_members
+
+
 def get_team_info(server_url: str, token: str, team_id: str) -> dict:
     """
     Получает информацию о team.
