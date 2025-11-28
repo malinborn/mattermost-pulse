@@ -3,7 +3,7 @@
 """
 import streamlit as st
 import pandas as pd
-from mattermost_api import parse_channel_id_from_url, get_channel_members, get_channel_info
+from mattermost_api import resolve_channel_id, get_channel_members, get_channel_info
 
 
 def render_users_tab(server_url: str, personal_token: str, product_name: str = "Mattermost"):
@@ -33,7 +33,13 @@ def _handle_load_users(server_url, personal_token, channel_input, product_name):
     """Обработка загрузки пользователей канала"""
     with st.spinner("🔄 Получение данных о пользователях канала..."):
         try:
-            channel_id = parse_channel_id_from_url(channel_input)
+            # Разрешаем URL/имя канала в channel_id
+            channel_id, error = resolve_channel_id(server_url, personal_token, channel_input)
+            
+            if error:
+                st.error(f"❌ {error}")
+                return
+            
             st.info(f"📝 Channel ID: `{channel_id}`")
             
             # Получаем информацию о канале

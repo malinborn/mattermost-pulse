@@ -282,6 +282,25 @@ def process_reactions(server_url: str, token: str, reactions: list, emoji_filter
 # Функции для работы с каналами
 # ============================================================================
 
+def parse_channel_url(url: str) -> dict:
+    """Парсит URL канала Mattermost и извлекает team name и channel name."""
+    # Паттерн для URL вида: https://server.com/team-name/channels/channel-name
+    url_pattern = r'/([a-z0-9\-_]+)/channels/([a-z0-9\-_]+)'
+    match = re.search(url_pattern, url, re.IGNORECASE)
+    
+    if match:
+        return {
+            'team_name': match.group(1),
+            'channel_name': match.group(2),
+            'is_url': True
+        }
+    
+    return {
+        'channel_name': url.strip(),
+        'is_url': False
+    }
+
+
 def parse_channel_id_from_url(url: str) -> str:
     """Извлекает ID канала из URL Mattermost или возвращает как есть, если это уже ID."""
     # Паттерн для URL вида: https://server.com/team/channels/CHANNEL_ID
@@ -397,6 +416,97 @@ def get_team_info(server_url: str, token: str, team_id: str) -> dict:
         return response.json()
     except requests.exceptions.RequestException:
         return {}
+
+
+def get_team_by_name(server_url: str, token: str, team_name: str) -> dict:
+    """
+    Получает информацию о team по его имени.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        team_name: Имя команды (из URL)
+        
+    Returns:
+        dict: Информация о team (включая id)
+    """
+    api_url = f"{server_url.rstrip('/')}/api/v4/teams/name/{team_name}"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(api_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
+        return {}
+
+
+def get_channel_by_name(server_url: str, token: str, team_id: str, channel_name: str) -> dict:
+    """
+    Получает информацию о канале по его имени в рамках team.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        team_id: ID команды
+        channel_name: Имя канала (из URL)
+        
+    Returns:
+        dict: Информация о канале (включая id)
+    """
+    api_url = f"{server_url.rstrip('/')}/api/v4/teams/{team_id}/channels/name/{channel_name}"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(api_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException:
+        return {}
+
+
+def resolve_channel_id(server_url: str, token: str, channel_input: str) -> tuple[str, str]:
+    """
+    Преобразует URL канала или его имя в channel_id.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        channel_input: URL канала, имя канала или channel_id
+        
+    Returns:
+        tuple: (channel_id, error_message). Если успешно - error_message пустая.
+    """
+    parsed = parse_channel_url(channel_input)
+    
+    # Если это URL с team и channel name
+    if parsed.get('is_url') and parsed.get('team_name'):
+        team_name = parsed['team_name']
+        channel_name = parsed['channel_name']
+        
+        # Получаем team_id по имени
+        team_info = get_team_by_name(server_url, token, team_name)
+        if not team_info or 'id' not in team_info:
+            return '', f'Не удалось найти team: {team_name}'
+        
+        team_id = team_info['id']
+        
+        # Получаем channel_id по имени
+        channel_info = get_channel_by_name(server_url, token, team_id, channel_name)
+        if not channel_info or 'id' not in channel_info:
+            return '', f'Не удалось найти канал: {channel_name} в team: {team_name}'
+        
+        return channel_info['id'], ''
+    
+    # Если это просто строка - пробуем использовать как channel_id
+    channel_id = parsed['channel_name']
+    
+    # Проверяем, что канал существует
+    channel_info = get_channel_info(server_url, token, channel_id)
+    if not channel_info or 'id' not in channel_info:
+        return '', f'Канал не найден. Убедитесь, что вы указали правильный URL или ID канала.'
+    
+    return channel_id, ''
 
 
 def format_post_preview(post_text: str, max_length: int = 100) -> str:

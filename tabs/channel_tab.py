@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 import streamlit as st
 from mattermost_api import (
-    parse_channel_id_from_url,
+    resolve_channel_id,
     get_channel_info,
     get_team_info,
     get_channel_posts,
@@ -85,7 +85,13 @@ def _load_and_analyze_channel(server_url, personal_token, channel_input, start_d
     """Загрузка постов из канала и анализ"""
     with st.spinner("🔄 Загрузка постов из канала..."):
         try:
-            channel_id = parse_channel_id_from_url(channel_input)
+            # Разрешаем URL/имя канала в channel_id
+            channel_id, error = resolve_channel_id(server_url, personal_token, channel_input)
+            
+            if error:
+                st.error(f"❌ {error}")
+                return
+            
             st.info(f"📝 Channel ID: `{channel_id}`")
             
             # Получаем информацию о канале и team
