@@ -1,6 +1,7 @@
 """
 Вкладка выгрузки и анализа канала
 """
+import os
 from datetime import datetime
 import streamlit as st
 from mattermost_api import (
@@ -17,6 +18,7 @@ from mattermost_api import (
     generate_post_link,
     get_user_info
 )
+from ai_helper import generate_channel_summary
 
 
 def render_channel_tab(server_url: str, personal_token: str, product_name: str = "Mattermost"):
@@ -69,8 +71,13 @@ def render_channel_tab(server_url: str, personal_token: str, product_name: str =
                 start_date, end_date, include_thread_reactions
             )
     
-    # Если посты загружены - показываем категории и статистику
+    # Если посты загружены - показываем AI саммари и категории
     if 'channel_posts' in st.session_state and st.session_state.channel_posts:
+        # Используем даты из session_state
+        saved_start_date = st.session_state.get('start_date')
+        saved_end_date = st.session_state.get('end_date')
+        if saved_start_date and saved_end_date:
+            _render_ai_summary_section(saved_start_date, saved_end_date)
         _render_categories_and_stats()
 
 
@@ -131,11 +138,101 @@ def _load_and_analyze_channel(server_url, personal_token, channel_input, start_d
                 st.session_state.channel_id = channel_id
                 st.session_state.include_thread_reactions = include_thread_reactions
                 st.session_state.team_name = team_name
+                st.session_state.start_date = start_date
+                st.session_state.end_date = end_date
                 
         except ValueError as e:
             st.error(f"❌ Ошибка: {str(e)}")
         except Exception as e:
             st.error(f"❌ Неожиданная ошибка: {str(e)}")
+
+
+def _render_ai_summary_section(start_date, end_date):
+    """Отображение секции AI-саммари канала"""
+    st.divider()
+    st.subheader("🤖 AI Саммари канала")
+    
+    # Инициализируем хранилище для саммари
+    if 'ai_channel_summary' not in st.session_state:
+        st.session_state.ai_channel_summary = None
+    if 'show_ai_summary' not in st.session_state:
+        st.session_state.show_ai_summary = False
+    
+    col1, col2 = st.columns([2, 5])
+    
+    with col1:
+        if st.button("✨ Сгенерировать AI саммари", help="Создать краткое саммари активности канала за период", key="generate_summary_btn"):
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            
+            if not openai_api_key:
+                st.error("🔑 Не найден API ключ OpenAI. Установите переменную окружения OPENAI_API_KEY")
+            else:
+                with st.spinner("🤖 Подготовка данных..."):
+                    try:
+                        posts = st.session_state.channel_posts
+                        
+                        # Собираем уникальных пользователей из первых 100 постов
+                        unique_users = set()
+                        for post in posts[:100]:
+                            user_id = post.get('user_id')
+                            if user_id:
+                                unique_users.add(user_id)
+                        
+                        # Создаем кеш пользователей (один запрос на пользователя)
+                        users_cache = {}
+                        if unique_users:
+                            st.info(f"Загрузка информации о {len(unique_users)} авторах...")
+                            for user_id in unique_users:
+                                try:
+                                    user_info = get_user_info(
+                                        st.session_state.server_url,
+                                        st.session_state.personal_token,
+                                        user_id
+                                    )
+                                    users_cache[user_id] = user_info
+                                except:
+                                    # Если не удалось получить инфо, используем ID
+                                    users_cache[user_id] = {'username': f"User-{user_id[:8]}"}
+                        
+                        st.info("Генерация AI саммари...")
+                        summary = generate_channel_summary(
+                            posts,
+                            str(start_date),
+                            str(end_date),
+                            openai_api_key,
+                            users_cache
+                        )
+                        st.session_state.ai_channel_summary = summary
+                        st.session_state.show_ai_summary = True
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Ошибка при генерации саммари: {str(e)}")
+    
+    with col2:
+        if st.session_state.show_ai_summary:
+            if st.button("❌ Скрыть саммари", help="Скрыть AI саммари", key="hide_summary_btn"):
+                st.session_state.show_ai_summary = False
+                st.rerun()
+    
+    # Показываем саммари
+    if st.session_state.show_ai_summary and st.session_state.ai_channel_summary:
+        st.markdown("---")
+        st.markdown("### 📊 Результат анализа")
+        
+        with st.container():
+            st.markdown(st.session_state.ai_channel_summary)
+        
+        st.markdown("---")
+        
+        # Копирование в буфер обмена
+        with st.expander("📋 Саммари в текстовом виде (для копирования)"):
+            st.text_area(
+                "Саммари",
+                value=st.session_state.ai_channel_summary,
+                height=300,
+                key="summary_text_area",
+                label_visibility="collapsed"
+            )
 
 
 def _render_categories_and_stats():
