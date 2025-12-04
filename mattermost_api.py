@@ -905,6 +905,102 @@ def send_direct_message(server_url: str, token: str, sender_id: str, recipient_i
     }
 
 
+def add_member_to_channel(server_url: str, token: str, channel_id: str, user_id: str) -> dict:
+    """
+    Добавляет пользователя в канал.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        channel_id: ID канала
+        user_id: ID пользователя
+        
+    Returns:
+        dict: {'success': bool, 'error': str | None}
+    """
+    api_url = f"{server_url.rstrip('/')}/api/v4/channels/{channel_id}/members"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    data = {"user_id": user_id}
+    
+    try:
+        response = requests.post(api_url, headers=headers, json=data, timeout=10)
+        response.raise_for_status()
+        return {'success': True, 'error': None}
+    except requests.exceptions.HTTPError:
+        if response.status_code == 403:
+            return {'success': False, 'error': 'Нет прав для добавления пользователя'}
+        elif response.status_code == 404:
+            return {'success': False, 'error': 'Канал или пользователь не найден'}
+        else:
+            return {'success': False, 'error': f'Ошибка API: {response.status_code}'}
+    except requests.exceptions.RequestException as e:
+        return {'success': False, 'error': f'Ошибка подключения: {str(e)}'}
+
+
+def add_members_to_channel(server_url: str, token: str, channel_id: str, emails: list[str]) -> dict:
+    """
+    Добавляет список пользователей в канал по их email.
+    
+    Args:
+        server_url: URL сервера Mattermost
+        token: Токен доступа
+        channel_id: ID канала
+        emails: Список email пользователей
+        
+    Returns:
+        dict: {
+            'total': int,
+            'successful': int,
+            'failed': int,
+            'already_member': int,
+            'results': list[dict]
+        }
+    """
+    results = []
+    successful = 0
+    failed = 0
+    already_member = 0
+    
+    for email in emails:
+        email = email.strip()
+        if not email:
+            continue
+            
+        user_id = get_user_id_by_identifier(server_url, token, email)
+        
+        if not user_id:
+            results.append({
+                'email': email,
+                'success': False,
+                'error': 'Пользователь не найден'
+            })
+            failed += 1
+            continue
+        
+        result = add_member_to_channel(server_url, token, channel_id, user_id)
+        
+        if result['success']:
+            results.append({'email': email, 'success': True, 'error': None})
+            successful += 1
+        elif 'уже является' in str(result.get('error', '')).lower() or result.get('error', '').startswith('Ошибка API: 400'):
+            results.append({'email': email, 'success': True, 'error': 'Уже в канале'})
+            already_member += 1
+        else:
+            results.append({'email': email, 'success': False, 'error': result.get('error')})
+            failed += 1
+    
+    return {
+        'total': len(emails),
+        'successful': successful,
+        'failed': failed,
+        'already_member': already_member,
+        'results': results
+    }
+
+
 def broadcast_message(server_url: str, token: str, sender_id: str, recipients: list[str], message: str) -> dict:
     """
     Отправляет сообщение списку пользователей.

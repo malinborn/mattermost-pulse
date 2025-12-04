@@ -9,6 +9,7 @@ from tabs.thread_tab import render_thread_tab
 from tabs.channel_tab import render_channel_tab
 from tabs.broadcast_tab import render_broadcast_tab
 from tabs.users_tab import render_users_tab
+from tabs.add_members_tab import render_add_members_tab
 
 
 def main():
@@ -139,7 +140,7 @@ def main():
     st.divider()
     
     # Вкладки
-    tab1, tab2, tab3, tab4 = st.tabs(["📥 Выгрузить тред", "📊 Выгрузить канал", "✉️ Рассылка", "👥 Пользователи канала"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📥 Выгрузить тред", "📊 Выгрузить канал", "✉️ Рассылка", "👥 Пользователи канала", "➕ Добавить участников"])
     
     with tab1:
         render_thread_tab(server_url, personal_token, product_name)
@@ -152,6 +153,9 @@ def main():
     
     with tab4:
         render_users_tab(server_url, personal_token, product_name)
+    
+    with tab5:
+        render_add_members_tab(server_url, personal_token, product_name)
 
 
 if __name__ == "__main__":
